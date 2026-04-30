@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Install system C dependencies needed to build wifiui.
+# Idempotent: only installs what's missing. Safe to re-run.
+
+ARCH_PKGS=(vulkan-headers)
+DEB_PKGS=(libvulkan-dev)
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+install_arch() {
+  local missing=()
+  for p in "${ARCH_PKGS[@]}"; do
+    pacman -Qq "$p" >/dev/null 2>&1 || missing+=("$p")
+  done
+  if [ ${#missing[@]} -eq 0 ]; then
+    echo "system deps: ok (${ARCH_PKGS[*]})"
+    return
+  fi
+  echo "system deps: installing ${missing[*]}"
+  sudo pacman -S --needed --noconfirm "${missing[@]}"
+}
+
+install_debian() {
+  local missing=()
+  for p in "${DEB_PKGS[@]}"; do
+    dpkg -s "$p" >/dev/null 2>&1 || missing+=("$p")
+  done
+  if [ ${#missing[@]} -eq 0 ]; then
+    echo "system deps: ok (${DEB_PKGS[*]})"
+    return
+  fi
+  echo "system deps: installing ${missing[*]}"
+  sudo apt-get update
+  sudo apt-get install -y "${missing[@]}"
+}
+
+case "$(uname -s)" in
+  Linux)
+    if have pacman; then install_arch
+    elif have apt-get; then install_debian
+    else
+      echo "unsupported Linux distro: install vulkan headers manually" >&2
+      exit 1
+    fi
+    ;;
+  Darwin)
+    echo "macOS uses Metal; no extra system deps required"
+    ;;
+  *)
+    echo "unsupported OS: $(uname -s)" >&2
+    exit 1
+    ;;
+esac
+
+if have mise; then
+  mise install
+fi
+
+echo "ready. next: make build"

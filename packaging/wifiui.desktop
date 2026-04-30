@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=wifiui
+Comment=WiFi & hotspot UI for iwd
+Exec=wifiui
+Icon=network-wireless
+Terminal=false
+Categories=Network;Settings;
+Keywords=wifi;wireless;network;hotspot;

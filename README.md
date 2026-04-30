@@ -4,6 +4,10 @@ A small, opinionated Wi-Fi GUI for Linux, built on top of [iwd](https://iwd.wiki
 
 Designed to feel native on tiling window managers (Hyprland, Sway) — keyboard-first, monospace, themeable.
 
+|  Networks                                              |  Diagnostics                                       |
+| :----------------------------------------------------: | :------------------------------------------------: |
+| ![networks tab](docs/screenshots/networks.png)         | ![tools tab](docs/screenshots/tools.png)           |
+
 ## Features
 
 - Browse, scan, and connect to nearby networks via iwd's D-Bus API.

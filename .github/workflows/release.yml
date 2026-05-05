@@ -27,13 +27,16 @@ jobs:
             libxkbcommon-dev \
             libxkbcommon-x11-dev \
             libx11-dev \
+            libx11-xcb-dev \
             libxcursor-dev \
             libxfixes-dev \
             libxrandr-dev \
             libxinerama-dev \
             libxi-dev \
+            libxxf86vm-dev \
             libegl-dev \
-            libgles2-mesa-dev
+            libgles2-mesa-dev \
+            libffi-dev
 
       - name: Build
         env:

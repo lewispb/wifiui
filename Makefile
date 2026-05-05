@@ -26,10 +26,11 @@ tidy:
 
 install: build
 	install -Dm755 bin/$(APP) $(BIN)/$(APP)
+	install -Dm755 script/wifiui-launch $(BIN)/wifiui-launch
 	install -Dm644 packaging/$(APP).desktop $(APPS)/$(APP).desktop
 
 uninstall:
-	rm -f $(BIN)/$(APP) $(APPS)/$(APP).desktop
+	rm -f $(BIN)/$(APP) $(BIN)/wifiui-launch $(APPS)/$(APP).desktop
 
 clean:
 	rm -rf bin

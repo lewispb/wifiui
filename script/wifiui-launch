@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Focus the running wifiui window if it exists, else launch a new instance.
+# Matches by Wayland app/class only (not window title), so terminals or editors
+# whose titles happen to contain "wifiui" don't get focused by mistake.
+set -e
+
+if command -v hyprctl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+  addr=$(hyprctl clients -j 2>/dev/null \
+    | jq -r '.[] | select(.class == "wifiui") | .address' \
+    | head -n1)
+  if [ -n "$addr" ]; then
+    exec hyprctl dispatch focuswindow "address:$addr"
+  fi
+fi
+
+if command -v uwsm-app >/dev/null 2>&1; then
+  exec setsid uwsm-app -- wifiui
+fi
+exec setsid wifiui

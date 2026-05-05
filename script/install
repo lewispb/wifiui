@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+# Install wifiui to ~/.local/bin from a GitHub release.
+#
+# Usage:
+#   curl -fsSL https://raw.githubusercontent.com/lewispb/wifiui/main/script/install | bash
+#
+# Pin a version:
+#   curl -fsSL .../script/install | WIFIUI_VERSION=v1.2.3 bash
+#
+# On Omarchy systems, also adds a waybar launcher icon. Skip with:
+#   curl -fsSL .../script/install | WIFIUI_SKIP_WAYBAR=1 bash
+
+set -euo pipefail
+
+REPO="lewispb/wifiui"
+PREFIX="${HOME}/.local"
+BIN_DIR="${PREFIX}/bin"
+APPS_DIR="${PREFIX}/share/applications"
+
+red()   { printf '\033[31m%s\033[0m\n' "$*" >&2; }
+yel()   { printf '\033[33m%s\033[0m\n' "$*"; }
+grn()   { printf '\033[32m%s\033[0m\n' "$*"; }
+info()  { printf '%s\n' "$*"; }
+
+die() { red "error: $*"; exit 1; }
+
+require() {
+  command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
+}
+
+require curl
+require tar
+require sha256sum
+require uname
+
+arch="$(uname -m)"
+case "$arch" in
+  x86_64|amd64) ;;
+  *) die "unsupported architecture: $arch (only linux/amd64 is published)" ;;
+esac
+
+if [ "$(uname -s)" != "Linux" ]; then
+  die "wifiui is Linux-only (uses iwd)"
+fi
+
+resolve_version() {
+  if [ -n "${WIFIUI_VERSION:-}" ]; then
+    printf '%s\n' "$WIFIUI_VERSION"
+    return
+  fi
+  # Follow the redirect from /releases/latest to extract the tag.
+  local url
+  url="$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+    "https://github.com/${REPO}/releases/latest")" \
+    || die "could not resolve latest release"
+  printf '%s\n' "${url##*/}"
+}
+
+VERSION="$(resolve_version)"
+[ -n "$VERSION" ] || die "empty version"
+case "$VERSION" in
+  v*) ;;
+  *) die "no release found (resolved version: '${VERSION}'). pin one with WIFIUI_VERSION=v..." ;;
+esac
+
+ASSET="wifiui-${VERSION}-linux-amd64.tar.gz"
+BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
+
+info "installing wifiui ${VERSION} -> ${BIN_DIR}"
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+curl -fsSL -o "${tmp}/${ASSET}"   "${BASE_URL}/${ASSET}"   || die "download failed: ${ASSET}"
+curl -fsSL -o "${tmp}/SHA256SUMS" "${BASE_URL}/SHA256SUMS" || die "download failed: SHA256SUMS"
+
+( cd "$tmp" && sha256sum --check --ignore-missing SHA256SUMS ) >/dev/null \
+  || die "checksum verification failed"
+
+tar -C "$tmp" -xzf "${tmp}/${ASSET}"
+src="${tmp}/wifiui-${VERSION}-linux-amd64"
+
+mkdir -p "$BIN_DIR" "$APPS_DIR"
+install -m 0755 "${src}/wifiui"         "${BIN_DIR}/wifiui"
+install -m 0755 "${src}/wifiui-launch"  "${BIN_DIR}/wifiui-launch"
+install -m 0644 "${src}/wifiui.desktop" "${APPS_DIR}/wifiui.desktop"
+
+grn "installed ${BIN_DIR}/wifiui"
+
+# Runtime dep checks (warn, don't fail).
+warn_dep() {
+  local name="$1" hint="$2"
+  yel "warning: ${name} not found on PATH/system"
+  yel "  install hint: ${hint}"
+}
+
+if ! command -v iwctl >/dev/null 2>&1 && [ ! -S /run/iwd/control ]; then
+  warn_dep "iwd"            "arch: sudo pacman -S iwd  |  debian/ubuntu: sudo apt-get install iwd"
+fi
+if ! ldconfig -p 2>/dev/null | grep -q 'libvulkan\.so\.1'; then
+  warn_dep "libvulkan.so.1" "arch: sudo pacman -S vulkan-icd-loader  |  debian/ubuntu: sudo apt-get install libvulkan1"
+fi
+
+case ":$PATH:" in
+  *":${BIN_DIR}:"*) ;;
+  *) yel "note: ${BIN_DIR} is not on your PATH — add it to your shell rc" ;;
+esac
+
+# ---- waybar integration (omarchy) -------------------------------------------
+# Adds a custom/wifiui module + matching CSS, then restarts waybar. Only runs
+# on configs that look like the omarchy default (detected via the existing
+# omarchy-launch-wifi network module). Idempotent.
+configure_waybar() {
+  local cfg="${HOME}/.config/waybar/config.jsonc"
+  local css="${HOME}/.config/waybar/style.css"
+
+  [ "${WIFIUI_SKIP_WAYBAR:-}" = "1" ] && return 0
+  [ -f "$cfg" ] || return 0
+  if ! grep -q 'omarchy-launch-wifi' "$cfg"; then
+    return 0
+  fi
+  if grep -q '"custom/wifiui"' "$cfg" && { [ ! -f "$css" ] || grep -q '#custom-wifiui' "$css"; }; then
+    info "waybar: custom/wifiui already configured"
+    return 0
+  fi
+
+  local ts; ts="$(date +%s)"
+  cp "$cfg" "${cfg}.bak.${ts}"
+
+  awk '
+    !done_list && /"network",/ {
+      print
+      match($0, /^[[:space:]]*/)
+      pad = substr($0, RSTART, RLENGTH)
+      print pad "\"custom/wifiui\","
+      done_list = 1
+      next
+    }
+    /"on-click": "omarchy-launch-wifi"/ { in_net = 1 }
+    !done_block && in_net && /^  \},$/ {
+      print
+      print "  \"custom/wifiui\": {"
+      print "    \"format\": \"\xf3\xb0\x9a\xa9\","
+      print "    \"tooltip-format\": \"wifiui\","
+      print "    \"on-click\": \"wifiui-launch\""
+      print "  },"
+      in_net = 0
+      done_block = 1
+      next
+    }
+    { print }
+  ' "${cfg}.bak.${ts}" > "$cfg"
+
+  if command -v python3 >/dev/null 2>&1; then
+    if ! python3 -c "import json,re,sys; t=open(sys.argv[1]).read(); t=re.sub(r'//.*','',t); json.loads(t)" "$cfg" >/dev/null 2>&1; then
+      red "waybar: edited config did not parse; restoring backup"
+      mv "${cfg}.bak.${ts}" "$cfg"
+      return 0
+    fi
+  fi
+
+  if [ -f "$css" ] && ! grep -q '#custom-wifiui' "$css"; then
+    cp "$css" "${css}.bak.${ts}"
+    cat >> "$css" <<'CSS'
+
+#custom-wifiui {
+  min-width: 12px;
+  margin: 0 7.5px;
+}
+CSS
+  fi
+
+  if command -v omarchy >/dev/null 2>&1; then
+    omarchy restart waybar >/dev/null 2>&1 || true
+  fi
+
+  grn "waybar: added custom/wifiui (backups: ${cfg}.bak.${ts}, ${css}.bak.${ts})"
+}
+
+configure_waybar
+
+info "to uninstall: rm ${BIN_DIR}/wifiui ${BIN_DIR}/wifiui-launch ${APPS_DIR}/wifiui.desktop"

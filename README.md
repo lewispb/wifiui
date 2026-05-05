@@ -27,7 +27,21 @@ Designed to feel native on tiling window managers (Hyprland, Sway) — keyboard-
 - Optional: [`op`](https://1password.com/downloads/command-line/) (1Password CLI) for passphrase autofill/save
 - Optional: `xdg-utils` for the captive-portal "open in browser" button
 
-## Build
+## Install
+
+One-liner — downloads the latest release and installs to `~/.local/bin`:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/lewispb/wifiui/main/script/install | bash
+```
+
+Pin a version with `WIFIUI_VERSION=v1.2.3`. The installer verifies SHA256 against the release's `SHA256SUMS` and warns if `iwd` or `libvulkan.so.1` are missing.
+
+On Omarchy systems, the installer also adds a `custom/wifiui` waybar module with a launcher icon. Skip with `WIFIUI_SKIP_WAYBAR=1`.
+
+Uninstall: `rm ~/.local/bin/wifiui ~/.local/bin/wifiui-launch ~/.local/share/applications/wifiui.desktop`.
+
+## Build from source
 
 ```sh
 make setup    # installs vulkan headers via pacman or apt

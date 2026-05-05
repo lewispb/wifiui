@@ -31,7 +31,9 @@ jobs:
             libxfixes-dev \
             libxrandr-dev \
             libxinerama-dev \
-            libxi-dev
+            libxi-dev \
+            libegl-dev \
+            libgles2-mesa-dev
 
       - name: Build
         env:
